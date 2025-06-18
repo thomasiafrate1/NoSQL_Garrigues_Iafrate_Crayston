@@ -19,6 +19,9 @@ Il fait suite aux premier cours théoriques et a pour but de mettre en pratique 
 ```
 atelier-mongodb/
 ├── docs/
+│   ├── assets/
+│   │   ├── image.png
+│   │   └── ...
 │   └── rapport.md
 ├── mongo/
 │   ├── standalone/

@@ -119,5 +119,227 @@ db.testcollection.deleteOne({ name: "Thomas" })
 
 - `mongosh` en ligne de commande
 
+# Partie 2 – MongoDB Replica Set
+
+## Méthode de déploiement
+
+Nous avons utilisé `docker-compose.yml` pour déployer 3 instances MongoDB configurées avec l’option `--replSet rs0`.  
+Chaque instance utilise un port différent exposé localement :
+
+- `mongo1` → 27017
+- `mongo2` → 27018
+- `mongo3` → 27019
+
+```yaml
+services:
+  mongo1:
+    image: mongo:6.0
+    ports:
+      - 27017:27017
+    command: ["--replSet", "rs0"]
+
+  mongo2:
+    image: mongo:6.0
+    ports:
+      - 27018:27017
+    command: ["--replSet", "rs0"]
+
+  mongo3:
+    image: mongo:6.0
+    ports:
+      - 27019:27017
+    command: ["--replSet", "rs0"]
+```
+
+## Initialisation du Replica Set
+
+Nous nous sommes connecté à `mongo1`, et ensuite nous avons exécuté la commande `rs.initiate()` dans `mongosh` :
+
+![alt text](2.1.png)
+![alt text](2.2.png)
+
+---
+
+## Vérification des rôles
+
+La commande `rs.status()` nous a permis de voir que :
+- `mongo1` est bien PRIMARY
+- `mongo2` et `mongo3` sont bien SECONDARY
+
+**Extraits de rs.status() :**
+**mongo1 :**
+![alt text](2.3.png)
+
+**mongo2 :**
+![alt text](2.4.png) 
+
+**mongo3 :**
+![alt text](2.5.png)
+
+---
+
+## Écriture depuis le PRIMARY
+
+Connexion à `mongo1` (localhost:27017) :
+
+```bash
+mongosh "mongodb://localhost:27017"
+```
+
+Insertion du document :
+
+![alt text](2.6.png)
+
+---
+
+## Lecture depuis un SECONDARY
+
+Connexion à `mongo2` :
+
+```bash
+mongosh "mongodb://localhost:27018"
+```
+
+On peut lire les données (grâce à `readPreference=secondary` par défaut en direct) :
+
+![alt text](2.8.png)
+
+---
+
+## Connexions testées
+
+- PRIMARY :
+  ```bash
+  mongosh "mongodb://localhost:27017"
+  ```
+
+- SECONDARY :
+  ```bash
+  mongosh "mongodb://localhost:27018"
+  ```
+
+
+---
+
+## Explication des modes lecture / écriture
+
+| Rôle       | Peut écrire | Peut lire | Note                            |
+|------------|-------------|-----------|---------------------------------|
+| PRIMARY    | OUI          | OUI        | C’est le seul nœud modifiable   |
+| SECONDARY  | NON          | OUI        | Lecture uniquement (si `readPreference=secondary`) |
+
+En cas de panne du PRIMARY, un SECONDARY devient automatiquement le nouveau PRIMARY.
+
+---
+
+#  Partie 3 – Intégration dans une application avec MongoDB (Standalone)
+
+##  Technologies utilisées
+
+- **Backend** : Node.js
+- **Base de données** : MongoDB (mode standalone)
+- **ODM** : Mongoose
+- **Librairies** :
+  - `dotenv` : gestion des variables d’environnement
+  - `mongoose` : ODM pour MongoDB
+- **Autres outils** :
+  - Docker (pour MongoDB standalone)
+  - Visual Studio Code
+
+---
+
+##  Structure du projet
+
+```
+integration/
+└── node/
+    ├── .env
+    ├── index.js
+    ├── package.json
+    ├── package-lock.json
+    └── node_modules/
+```
+
+---
+
+## Connexion sécurisée
+
+**Fichier `.env` :**
+```env
+MONGO_URI=mongodb://admin:admin123@localhost:27017/integrationdb?authSource=admin
+```
+
+**Explication de l'URI** :
+- `admin:admin123` : identifiants de connexion
+- `localhost:27017` : adresse du conteneur MongoDB standalone
+- `integrationdb` : nom de la base utilisée
+- `authSource=admin` : précise que l'authentification se fait via la base `admin`
+
+---
+
+##  Code source : `index.js`
+
+```javascript
+require('dotenv').config();
+const mongoose = require('mongoose');
+
+const uri = process.env.MONGO_URI;
+
+mongoose.connect(uri)
+  .then(async () => {
+
+    const User = mongoose.model('User', {
+      name: String,
+      age: Number
+    });
+
+    const user = await User.create({ name: 'Thomas', age: 22 });
+    console.log('✔️ Inserted:', user);
+
+    const found = await User.find({ age: { $gte: 18 } });
+    console.log('🔍 Found users >= 18:', found);
+
+    const updated = await User.updateOne({ name: 'Thomas' }, { $set: { age: 23 } });
+    console.log('🔄 Updated count:', updated.modifiedCount);
+
+    const deleted = await User.deleteOne({ name: 'Thomas' });
+    console.log('❌ Deleted count:', deleted.deletedCount);
+
+    mongoose.connection.close();
+  })
+  .catch(err => {
+    console.error('❌ Error:', err);
+  });
+
+```
+
+---
+
+
+##  Résultats des tests
+
+![alt text](image-3.png)
+
+---
+
+##  Méthodes de connexion possibles
+
+| Mode | URI | Description |
+|------|-----|-------------|
+| Standalone | `mongodb://admin:admin123@localhost:27017/integrationdb?authSource=admin` | Connexion à une seule instance MongoDB |
+| Replica Set | `mongodb://localhost:27017,localhost:27018,localhost:27019/integrationdb?replicaSet=rs0` | Connexion à un ensemble de réplicas (ne fonctionne que si tous les hôtes sont joignables depuis Node.js) |
+
+---
+
+##  Dépendances
+
+```bash
+npm install mongoose dotenv
+```
+
+
+
+
+
 
 

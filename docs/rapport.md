@@ -1,8 +1,20 @@
+## Introduction
+
+Dans ce projet, on a exploré plusieurs aspects de MongoDB : le déploiement en standalone, la configuration d’un Replica Set, et l’intégration avec une application Node.js. L’objectif était autant technique que pédagogique : comprendre comment fonctionnent les bases de données NoSQL, comment les manipuler, et surtout comment les connecter à une application réelle. Voici un retour sur notre démarche, nos choix, et ce que ça nous a appris.
+
+---
+
 # Partie 1 – MongoDB Standalone
 
-## Méthode de déploiement
+## Déploiement de MongoDB en mode standalone
 
-On déploie avec Docker Compose dans le dossier *`mongo/standalone`* :
+Pour commencer le projet, on a décidé de partir sur un déploiement simple avec une seule instance MongoDB. Le but, c'était d’avoir un environnement simple et minimal pour bien comprendre comment fonctionne l’installation de base et comment sécuriser les accès.
+
+
+## Mise en place avec Docker Compose
+
+On a choisi d’utiliser Docker Compose pour déployer MongoDB rapidement, sans rien installer en local. Voici le fichier qu’on a mis dans *``mongo/standalone``* :
+
 
 ```yaml
 version: '3.8'
@@ -21,16 +33,13 @@ services:
     restart: unless-stopped
 ```
 
-## Création de l’utilisateur
+## Script d'initialisation init.js
 
-Un script *`init.js`* est placé dans le dossier *`init/`*. Ce script est exécuté **une seule fois** au premier lancement du conteneur (si la base de données est vide).  
-Il permet de :
-1. **Créer une base de données** `testdb`
-2. **Créer un utilisateur** `testuser` avec un mot de passe (`testpass`)
-3. **Donner les droits `readWrite`** à cet utilisateur uniquement sur `testdb`
-4. **Insérer automatiquement quelques documents** dans une collection appelée `testcollection`
-
-Voici le contenu du script *`init.js`* :
+Dans le dossier ``init/``, on a ajouté un petit script ``init.js`` qui se lance au premier boot. Il sert à :
+- Créer une base de données testdb
+- Créer un utilisateur testuser avec mot de passe testpass
+- Lui donner les droits readWrite uniquement sur testdb
+- Et insérer 3 documents dans une collection testcollection
 
 ```js
 db = db.getSiblingDB("testdb");
@@ -47,47 +56,36 @@ db.testcollection.insertMany([
   { name: "Thomas", age: 75 }
 ]);
 ```
-## Installation de mongosh (CMD MongoDB)
+## Connexion à la base avec mongoSH
 
-`mongosh` permet d’exécuter des commandes MongoDB en ligne de commande et de tester rapidement des requêtes directement dans le CMD.
+Pour se connecter et tester des commandes, on a utilisé ``mongosh``, le shell MongoDB.
 
-Nous avons téléchargé la version ZIP depuis le site officiel de MongoDB.
-
-Après décompression :
-- On ouvre un terminal dans le dossier `bin`
-- On exécute directement le fichier `mongosh.exe`
-
-## Connexion à la base
-
-### Avec mongosh 
+On a téléchargé la version zip depuis le site officiel, puis on a lancé mongosh.exe dans le terminal.
+#### Connexion à la base avec les identifiants admin :
 
 ```bash
 mongosh "mongodb://admin:admin123@localhost:27017" --authenticationDatabase admin
 ```
 
-Puis dans le shell :
-
-```js
+```bash
 use testdb
 db.auth("testuser", "testpass")
 ```
 
 
-
 ## Requêtes exécutées
 
-### Rechercher tous les documents :
+On a essayé plusieurs requêtes Mongo classiques :
+
+### Lire tous les documents :
 
 ```js
 db.testcollection.find()
 ```
 
-**Résultat** :
-> Cette commande nous affiche tous les documents et leurs infos.
-
 ![alt text](image.png)
 
-### Mise à jour d’un document
+### Mettre à jour d’un document
 
 ```js
 db.testcollection.updateOne(
@@ -95,36 +93,38 @@ db.testcollection.updateOne(
   { $set: { age: 28 } }
 )
 ```
-**Résultat** :
-> Cette commande met à jour l’âge de "Matt" à 28.
 
 ![alt text](image-1.png)
 
-### Suppression d’un document
+### Supprimer un document
 
 ```js
 db.testcollection.deleteOne({ name: "Thomas" })
 ```
-**Résultat** :
-> Supprime le premier document où `name` est "Thomas".
 
 ![alt text](image-2.png)
 
 ## Problèmes rencontrés
 
-- Aucun blocage majeur. Il faut bien se connecter en précisant `authSource=admin` pour l'utilisateur root.
+Pas de grosse difficulté, sauf une chose : il faut bien penser à utiliser authSource=admin dans l’URI de connexion. Sinon, la connexion échoue même avec les bons identifiants.
 
 
 ## Interface utilisée
 
 - `mongosh` en ligne de commande
 
+
+## Résultat 
+
+Grâce à cette première partie, on a pu installer et configurer MongoDB très rapidement avec Docker. On a appris à sécuriser l’accès avec des utilisateurs, à interagir avec la base via mongosh, et à manipuler des documents. C’était une bonne première étape pour comprendre les bases de MongoDB et son fonctionnement sans trop de complexité.
+
 # Partie 2 – MongoDB Replica Set
+
+Le but était de voir comment MongoDB gérait la haute disponibilité : plusieurs nœuds, rôle PRIMARY/SECONDARY.
 
 ## Méthode de déploiement
 
-Nous avons utilisé `docker-compose.yml` pour déployer 3 instances MongoDB configurées avec l’option `--replSet rs0`.  
-Chaque instance utilise un port différent exposé localement :
+On a utilisé un `docker-compose.yml` pour lancer 3 instances MongoDB sur des ports différents : 
 
 - `mongo1` → 27017
 - `mongo2` → 27018
@@ -153,7 +153,7 @@ services:
 
 ## Initialisation du Replica Set
 
-Nous nous sommes connecté à `mongo1`, et ensuite nous avons exécuté la commande `rs.initiate()` dans `mongosh` :
+On s’est connecté à ``mongo1`` avec ``mongosh``, puis on a lancé :
 
 ![alt text](2.1.png)
 ![alt text](2.2.png)
@@ -162,11 +162,10 @@ Nous nous sommes connecté à `mongo1`, et ensuite nous avons exécuté la comma
 
 ## Vérification des rôles
 
-La commande `rs.status()` nous a permis de voir que :
+Grâce à ``rs.status()``, on a vu que :
 - `mongo1` est bien PRIMARY
 - `mongo2` et `mongo3` sont bien SECONDARY
 
-**Extraits de rs.status() :**
 **mongo1 :**
 ![alt text](2.3.png)
 
@@ -180,7 +179,7 @@ La commande `rs.status()` nous a permis de voir que :
 
 ## Écriture depuis le PRIMARY
 
-Connexion à `mongo1` (localhost:27017) :
+Connexion à `mongo1` (port 27017) :
 
 ```bash
 mongosh "mongodb://localhost:27017"
@@ -194,13 +193,13 @@ Insertion du document :
 
 ## Lecture depuis un SECONDARY
 
-Connexion à `mongo2` :
+Connexion à `mongo2` (port 27018) :
 
 ```bash
 mongosh "mongodb://localhost:27018"
 ```
 
-On peut lire les données (grâce à `readPreference=secondary` par défaut en direct) :
+On lit les données  :
 
 ![alt text](2.8.png)
 
@@ -218,32 +217,28 @@ On peut lire les données (grâce à `readPreference=secondary` par défaut en d
   mongosh "mongodb://localhost:27018"
   ```
 
+## Résultat
+
+Cette partie nous a permis de comprendre le fonctionnement d’un Replica Set : comment les instances se synchronisent, comment se passent les élections, et quelles sont les contraintes en lecture/écriture. Même si la mise en place réseau a été un peu complexe, on a bien compris l’intérêt de la haute disponibilité et de la tolérance aux pannes.
 
 ---
 
-## Explication des modes lecture / écriture
+#  Partie 3 – Intégration de MongoDB dans une application Node.js
 
-| Rôle       | Peut écrire | Peut lire | Note                            |
-|------------|-------------|-----------|---------------------------------|
-| PRIMARY    | OUI          | OUI        | C’est le seul nœud modifiable   |
-| SECONDARY  | NON          | OUI        | Lecture uniquement (si `readPreference=secondary`) |
 
-En cas de panne du PRIMARY, un SECONDARY devient automatiquement le nouveau PRIMARY.
-
----
-
-#  Partie 3 – Intégration dans une application avec MongoDB (Standalone)
+## Objectif
+On voulait tester une vraie interaction entre une base MongoDB et une application. Le but c’était de coder un petit backend Node.js qui fait des opérations CRUD sur la base. 
 
 ##  Technologies utilisées
 
 - **Backend** : Node.js
-- **Base de données** : MongoDB (mode standalone)
+- **Base de données** : MongoDB 
 - **ODM** : Mongoose
 - **Librairies** :
   - `dotenv` : gestion des variables d’environnement
   - `mongoose` : ODM pour MongoDB
 - **Autres outils** :
-  - Docker (pour MongoDB standalone)
+  - Docker 
   - Visual Studio Code
 
 ---
@@ -270,14 +265,14 @@ MONGO_URI=mongodb://admin:admin123@localhost:27017/integrationdb?authSource=admi
 ```
 
 **Explication de l'URI** :
-- `admin:admin123` : identifiants de connexion
-- `localhost:27017` : adresse du conteneur MongoDB standalone
-- `integrationdb` : nom de la base utilisée
-- `authSource=admin` : précise que l'authentification se fait via la base `admin`
+- `admin:admin123` : login du root Mongo
+- `localhost:27017` : port d’écoute de MongoDB
+- `integrationdb` : base de données ciblée
+- `authSource=admin` : obligatoire pour l’authentification root
 
 ---
 
-##  Code source : `index.js`
+##  `index.js` - Notre App
 
 ```javascript
 require('dotenv').config();
@@ -320,14 +315,6 @@ mongoose.connect(uri)
 
 ![alt text](image-3.png)
 
----
-
-##  Méthodes de connexion possibles
-
-| Mode | URI | Description |
-|------|-----|-------------|
-| Standalone | `mongodb://admin:admin123@localhost:27017/integrationdb?authSource=admin` | Connexion à une seule instance MongoDB |
-| Replica Set | `mongodb://localhost:27017,localhost:27018,localhost:27019/integrationdb?replicaSet=rs0` | Connexion à un ensemble de réplicas (ne fonctionne que si tous les hôtes sont joignables depuis Node.js) |
 
 ---
 
@@ -337,6 +324,9 @@ mongoose.connect(uri)
 npm install mongoose dotenv
 ```
 
+## Résultats 
+
+On a réussi à connecter une app Node.js à notre base MongoDB et à exécuter toutes les opérations CRUD. On a bien vu l’intérêt de Mongoose pour structurer les données et simplifier les requêtes. C’était aussi un bon test d’environnement réel avec variables d’environnement, gestion des erreurs, et logique backend connectée à une vraie base.
 
 
 
